@@ -64,6 +64,11 @@ ifneq ($(prorab_included),true)
         PREFIX := /usr/local
     endif
 
+    prorab_rm := rm -rf
+    prorab_rmdir := rm -rf
+    prorab_mkdir := mkdir -p
+    prorab_dd := / #directory delimeter
+
     #Detect operating system
     prorab_private_os := $(shell uname)
     prorab_private_os := $(patsubst MINGW%,Windows,$(prorab_private_os))
@@ -75,8 +80,17 @@ ifneq ($(prorab_included),true)
     else ifeq ($(prorab_private_os), Linux)
         prorab_os := linux
     else
-        $(info Warning: unknown OS, assuming linux)
-        prorab_os := linux
+        prorab_private_os := $(shell ver)
+        prorab_private_os := $(filter Windows,$(prorab_private_os))
+        ifeq ($(prorab_private_os), Windows)
+            prorab_rm := del /Q /F
+            prorab_rmdir := rmdir /Q /S
+            prorab_mkdir := mkdir
+            prorab_dd := $(subst a,,\a)
+        else
+            $(info Warning: unknown OS, assuming linux)
+            prorab_os := linux
+        endif
     endif
 
     os := $(prorab_os)
@@ -184,7 +198,7 @@ ifneq ($(prorab_included),true)
         uninstall::
 		$(prorab_echo)for i in $(prorab_private_headers); do \
 		    path=$$$$(echo $$$$i | cut -d "/" -f1) && \
-		    rm -rf $(DESTDIR)$(PREFIX)/include/$$$$path; \
+		    $(prorab_rmdir) $(DESTDIR)$(PREFIX)/include/$$$$path; \
 		done
 
         #need empty line here to avoid merging with adjacent macro instantiations
@@ -265,7 +279,7 @@ ifneq ($(prorab_included),true)
         #need empty line here to avoid merging with adjacent macro instantiations
 
         $1: $(if $(shell echo '$2' | cmp $1 2>/dev/null), phony,)
-		$(prorab_echo)mkdir -p $$(dir $$@)
+		$(prorab_echo)$(prorab_mkdir) $$(subst /,$$(prorab_dd),$$(dir $$@))
 		$(prorab_echo)touch $$@
 		$(prorab_echo)echo '$2' > $$@
 
@@ -302,27 +316,27 @@ ifneq ($(prorab_included),true)
         #we don't want to store equivalent paths in a different way, so substitute 'd' to empty string
         $(eval prorab_private_temp_d := $(d))
         $(eval d := )
-	$(call prorab-private-args-file-rules, $(prorab_cxxargs_file),$(this_cxx) $(this_cppflags) $(this_cxxflags))
+        $(call prorab-private-args-file-rules, $(prorab_cxxargs_file),$(this_cxx) $(this_cppflags) $(this_cxxflags))
         $(call prorab-private-args-file-rules, $(prorab_cargs_file),$(this_cc) $(this_cppflags) $(this_cflags))
         $(eval d := $(prorab_private_temp_d))
 
         #compile .cpp static pattern rule
         $(prorab_this_cpp_objs): $(d)$(prorab_this_obj_dir)cpp/$(prorab_private_objspacer)%.o: $(d)%.cpp $(prorab_cxxargs_file)
 		@printf "\\033[1;34mCompiling\\033[0m $$<...\n"
-		$(prorab_echo)mkdir -p $$(dir $$@)
+		$(prorab_echo)$(prorab_mkdir) $$(dir $$@)
 		$(prorab_echo)$(this_cxx) -c -MF "$$(patsubst %.o,%.d,$$@)" -MD -MP -o "$$@" $(prorab_cxxargs) $$<
 
         #compile .c static pattern rule
         $(prorab_this_c_objs): $(d)$(prorab_this_obj_dir)c/$(prorab_private_objspacer)%.o: $(d)%.c $(prorab_cargs_file)
 		@printf "\\033[1;35mCompiling\\033[0m $$<...\n"
-		$(prorab_echo)mkdir -p $$(dir $$@)
+		$(prorab_echo)$(prorab_mkdir) $$(dir $$@)
 		$(prorab_echo)$(this_cc) -c -MF "$$(patsubst %.o,%.d,$$@)" -MD -MP -o "$$@" $(prorab_cargs) $$<
 
         #include rules for header dependencies
         include $(wildcard $(addsuffix *.d,$(dir $(prorab_this_objs))))
 
         clean::
-		$(prorab_echo)rm -rf $(d)$(prorab_this_obj_dir)
+		$(prorab_echo)$(prorab_rmdir) $(subst /,$(prorab_dd),$(d)$(prorab_this_obj_dir))
 
         #need empty line here to avoid merging with adjacent macro instantiations
 
